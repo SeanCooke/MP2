@@ -62,7 +62,7 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 	/*
 	 * Print out the Ethernet information.
 	 */
-	fprintf(outfile, "================= ETHERNET HEADER ==============\n");
+	/*fprintf(outfile, "================= ETHERNET HEADER ==============\n");
 	fprintf(outfile, "Source Address:\t\t");
 	for (index = 0; index < ETHER_ADDR_LEN; index++) {
 		fprintf(outfile, "%x", header.ether_shost[index]);
@@ -96,7 +96,7 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 	default:
 		fprintf(outfile, "Unknown Protocol: %x\n", header.ether_type);
 		break;
-	}
+	}*/
 
 	/*
 	 * Adjust the pointer to point after the Ethernet header.
@@ -105,7 +105,7 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 
 	bcopy(*packet, &ip_header, sizeof(struct ip));
 
-	fprintf(outfile, "================= IP HEADER ==============\n");
+	/*fprintf(outfile, "================= IP HEADER ==============\n");
 	fprintf(outfile, "Source Address:\t\t");
 
 	fprintf(outfile, "%s", inet_ntoa(ip_header.ip_src));
@@ -116,7 +116,7 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 
 	fprintf(outfile, "%s", inet_ntoa(ip_header.ip_dst));
 
-	fprintf(outfile, "\n");
+	fprintf(outfile, "\n");*/
 	size_ip = (ip_header.ip_hl) * 4;
 	ip_len = ntohs(ip_header.ip_len);
 
@@ -129,7 +129,7 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 
 	bcopy(*packet, &tcp_header, sizeof(struct tcphdr));
 
-	fprintf(outfile, "================= TCP HEADER ==============\n");
+	/*fprintf(outfile, "================= TCP HEADER ==============\n");
 	fprintf(outfile, "Source Port:\t\t");
 
 	fprintf(outfile, "%d", ntohs(tcp_header.th_sport));
@@ -140,7 +140,7 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 
 	fprintf(outfile, "%d", ntohs(tcp_header.th_dport));
 
-	fprintf(outfile, "\n");
+	fprintf(outfile, "\n");*/
 	size_tcp = (tcp_header.th_off) * 4;
 
 	/*
@@ -150,22 +150,47 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 
 	size_payload = ip_len - (size_ip + size_tcp);
 
-	printf("   Payload (%d bytes):\n", size_payload);
+	//printf("   Payload (%d bytes):\n", size_payload);
 
 	payload = (u_char *) (p_start + SIZE_ETHERNET + size_ip + size_tcp);
 
 	if (size_payload > 0) {
 		if (strncmp(payload, "GET", strlen("GET")) == 0
 				|| strncmp(payload, "POST", strlen("POST")) == 0) {
+			char httpHdrStr[size_payload];
 			for (int i = 0; i < size_payload; i++) {
-				if (isprint(*payload))
-					printf("%c", *payload);
-				else
-					printf(".");
+				if (isprint(*payload)){
+					//printf("%c", *payload);
+					httpHdrStr[i] = *payload;
+				}
+				else{
+					//printf("\n");
+					httpHdrStr[i] = '\n';
+				}
 				payload++;
 			}
+			char * token, * host, * path;
+			token = strtok(httpHdrStr, "\n\n");
+			char *httpHdr[sizeof(strtok(httpHdrStr, "\n\n"))];
+			httpHdr[0] = token;
+			int i = 0;
+			while (token != NULL) {
+				httpHdr[i] = token;
+				token = strtok(NULL, "\n\n");
+				i++;
+			}
+			host = strtok(httpHdr[1], " ");
+			host = strtok(NULL, " ");
+			path = strtok(httpHdr[0], " ");
+			path = strtok(NULL, " ");
+			if(ntohs(tcp_header.th_dport) == 80){
+				printf("http://");
+			}else if(ntohs(tcp_header.th_dport) == 443){
+				printf("https://");
+			}
+			printf(host); printf(path);
+			printf("\n");
 		}
-		printf("\n");
 	}
 
 	/*
