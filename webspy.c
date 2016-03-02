@@ -19,6 +19,7 @@
 #include <sys/time.h>
 
 #include <sys/socket.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -59,44 +60,7 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 	 */
 	bcopy(*packet, &header, sizeof(struct ether_header));
 
-	/*
-	 * Print out the Ethernet information.
-	 */
-	/*fprintf(outfile, "================= ETHERNET HEADER ==============\n");
-	fprintf(outfile, "Source Address:\t\t");
-	for (index = 0; index < ETHER_ADDR_LEN; index++) {
-		fprintf(outfile, "%x", header.ether_shost[index]);
-	}
-	fprintf(outfile, "\n");
 
-	fprintf(outfile, "Destination Address:\t");
-	for (index = 0; index < ETHER_ADDR_LEN; index++) {
-		fprintf(outfile, "%x", header.ether_dhost[index]);
-	}
-	fprintf(outfile, "\n");
-
-	fprintf(outfile, "Protocol Type:\t\t");
-	switch (ntohs(header.ether_type)) {
-	case ETHERTYPE_PUP:
-		fprintf(outfile, "PUP Protocol\n");
-		break;
-
-	case ETHERTYPE_IP:
-		fprintf(outfile, "IP Protocol\n");
-		break;
-
-	case ETHERTYPE_ARP:
-		fprintf(outfile, "ARP Protocol\n");
-		break;
-
-	case ETHERTYPE_REVARP:
-		fprintf(outfile, "RARP Protocol\n");
-		break;
-
-	default:
-		fprintf(outfile, "Unknown Protocol: %x\n", header.ether_type);
-		break;
-	}*/
 
 	/*
 	 * Adjust the pointer to point after the Ethernet header.
@@ -105,18 +69,7 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 
 	bcopy(*packet, &ip_header, sizeof(struct ip));
 
-	/*fprintf(outfile, "================= IP HEADER ==============\n");
-	fprintf(outfile, "Source Address:\t\t");
 
-	fprintf(outfile, "%s", inet_ntoa(ip_header.ip_src));
-
-	fprintf(outfile, "\n");
-
-	fprintf(outfile, "Destination Address:\t");
-
-	fprintf(outfile, "%s", inet_ntoa(ip_header.ip_dst));
-
-	fprintf(outfile, "\n");*/
 	size_ip = (ip_header.ip_hl) * 4;
 	ip_len = ntohs(ip_header.ip_len);
 
@@ -129,18 +82,6 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 
 	bcopy(*packet, &tcp_header, sizeof(struct tcphdr));
 
-	/*fprintf(outfile, "================= TCP HEADER ==============\n");
-	fprintf(outfile, "Source Port:\t\t");
-
-	fprintf(outfile, "%d", ntohs(tcp_header.th_sport));
-
-	fprintf(outfile, "\n");
-
-	fprintf(outfile, "Destination Port:\t");
-
-	fprintf(outfile, "%d", ntohs(tcp_header.th_dport));
-
-	fprintf(outfile, "\n");*/
 	size_tcp = (tcp_header.th_off) * 4;
 
 	/*
@@ -150,47 +91,50 @@ void print_packet(FILE * outfile, const unsigned char ** packet) {
 
 	size_payload = ip_len - (size_ip + size_tcp);
 
-	//printf("   Payload (%d bytes):\n", size_payload);
-
 	payload = (u_char *) (p_start + SIZE_ETHERNET + size_ip + size_tcp);
 
 	if (size_payload > 0) {
-		if (strncmp(payload, "GET", strlen("GET")) == 0
-				|| strncmp(payload, "POST", strlen("POST")) == 0) {
-			char httpHdrStr[size_payload];
-			for (int i = 0; i < size_payload; i++) {
-				if (isprint(*payload)){
-					//printf("%c", *payload);
-					httpHdrStr[i] = *payload;
+		if (ntohs(tcp_header.th_dport) == 80) {
+			if (strncmp(payload, "GET", strlen("GET")) == 0
+					|| strncmp(payload, "POST", strlen("POST")) == 0) {
+				char httpHdrStr[size_payload];
+				for (int i = 0; i < size_payload; i++) {
+					if (isprint(*payload)) {
+						httpHdrStr[i] = *payload;
+					} else {
+						httpHdrStr[i] = '\n';
+					}
+					payload++;
 				}
-				else{
-					//printf("\n");
-					httpHdrStr[i] = '\n';
+				char * token, *host, *path;
+				token = strtok(httpHdrStr, "\n\n");
+				char *httpHdr[sizeof(strtok(httpHdrStr, "\n\n"))];
+				httpHdr[0] = token;
+				int i = 0;
+				while (token != NULL) {
+					httpHdr[i] = token;
+					token = strtok(NULL, "\n\n");
+					i++;
 				}
-				payload++;
-			}
-			char * token, * host, * path;
-			token = strtok(httpHdrStr, "\n\n");
-			char *httpHdr[sizeof(strtok(httpHdrStr, "\n\n"))];
-			httpHdr[0] = token;
-			int i = 0;
-			while (token != NULL) {
-				httpHdr[i] = token;
-				token = strtok(NULL, "\n\n");
-				i++;
-			}
-			host = strtok(httpHdr[1], " ");
-			host = strtok(NULL, " ");
-			path = strtok(httpHdr[0], " ");
-			path = strtok(NULL, " ");
-			if(ntohs(tcp_header.th_dport) == 80){
+				host = strtok(httpHdr[1], " ");
+				host = strtok(NULL, " ");
+				path = strtok(httpHdr[0], " ");
+				path = strtok(NULL, " ");
 				printf("http://");
-			}else if(ntohs(tcp_header.th_dport) == 443){
-				printf("https://");
+				printf(host);
+				printf("%s\n", path);
 			}
-			printf(host); printf(path);
-			printf("\n");
+		} else if (ntohs(tcp_header.th_dport) == 443) {
+			struct sockaddr_in sa;
+			char host[NI_MAXHOST];
+			sa.sin_family = AF_INET;
+			inet_pton(AF_INET, inet_ntoa(ip_header.ip_dst), &sa.sin_addr);
+			getnameinfo((struct sockaddr*) &sa, sizeof(sa), host, sizeof(host),
+					NULL, 0, 0);
+			printf("https://");
+			printf("%s\n", host);
 		}
+
 	}
 
 	/*
@@ -259,11 +203,6 @@ int main(int argc, char ** argv) {
 		fprintf(stderr, "%s: Failed to initialize pcap\n", argv[0]);
 		exit(1);
 	}
-
-	/*if (pcap_setfilter(pcapd, &HTTPFilter) == -1) {
-		fprintf(stderr, "cannot set pcap filter\n");
-		exit(1);
-	}*/
 
 	/*
 	 * Begin looping through collecting packets until we hit the
