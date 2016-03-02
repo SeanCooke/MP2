@@ -6,4 +6,4 @@
 
 * Does using HTTPS prevent hackers from knowing which web site a user is browsing?
 
-> Using HTTPS does not prevent hackers from knowing which web site a user is browsing.  The IP Address of the web site a user is browsing can be determined from the IP Header.  The web site a user is browsing can be determined using a nslookup using the IP Address.
+> Using HTTPS does not prevent hackers from knowing which web site a user is browsing.  The IP Address of the web site a user is browsing can be determined from the IP Header.  The web site a user is browsing can be determined using a nslookup on the IP Address.
